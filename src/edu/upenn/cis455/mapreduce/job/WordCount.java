@@ -1,4 +1,4 @@
-package edu.upenn.cis455.mapreduce;
+package edu.upenn.cis455.mapreduce.job;
 
 import edu.upenn.cis455.mapreduce.Context;
 import edu.upenn.cis455.mapreduce.Job;

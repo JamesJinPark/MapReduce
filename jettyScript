@@ -1,0 +1,12 @@
+#!/bin/bash
+# script to run jetty
+
+cd /home/cis455/workspace/HW3/
+
+ant
+
+sudo cp /home/cis455/workspace/HW3/master.war /usr/share/jetty/webapps/
+
+cd /usr/share/jetty/
+
+sudo java -jar start.jar
