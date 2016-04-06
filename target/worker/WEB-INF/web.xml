@@ -8,17 +8,17 @@
          <servlet-class>edu.upenn.cis455.mapreduce.worker.WorkerServlet</servlet-class>
          <init-param>
            <param-name>storagedir</param-name>
-           <param-value>/home/cis455/storage/</param-value>
+           <param-value>/home/cis455/storage1/</param-value>
          </init-param>
          <init-param>
            <param-name>master</param-name>
-           <param-value>127.0.0.1:3000</param-value>
+           <param-value>127.0.0.1:8080</param-value>
          </init-param>
           <init-param>
            <param-name>port</param-name>
-           <param-value>8000</param-value>
+           <param-value>8081</param-value>
          </init-param>
-
+         <load-on-startup>0</load-on-startup>
      </servlet>
 
      <servlet-mapping>

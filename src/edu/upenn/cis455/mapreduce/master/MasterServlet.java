@@ -2,16 +2,16 @@ package edu.upenn.cis455.mapreduce.master;
 
 import java.io.*;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
-import javax.servlet.*;
+import java.util.Set;
+
 import javax.servlet.http.*;
 
 public class MasterServlet extends HttpServlet {
 	static final long serialVersionUID = 455555001;
 	HashMap<String, WorkerStatus> workerStatuses = new HashMap<>();
-	String currentJob = "None";
+	JobContext currentJobContext = new JobContext();
 
 	public void doGet(HttpServletRequest request, HttpServletResponse response) throws java.io.IOException  {
 		PrintWriter out = response.getWriter();
@@ -21,7 +21,8 @@ public class MasterServlet extends HttpServlet {
 		StringBuffer buffer = new StringBuffer();
 		
 		switch(path){
-			case "/workerstatus": 	buffer = workerStatusHandler(request, response);			
+			case "/workerstatus": 	System.out.println("Received workerstatus GET request");
+									buffer = workerStatusHandler(request, response);
 									break;
 			case "/status": 		buffer = sendStatus(request, response);
 									break;
@@ -54,12 +55,13 @@ public class MasterServlet extends HttpServlet {
 		
 		workerStatuses.put(workerIPAddress + ":" + port, new WorkerStatus(workerIPAddress, port, job, status, 
 				keysRead, keysWritten));
-
+	
 		if(checkAllWorkerStatuses()){
-			runReduce(String job, String );
+			sendReduce(request);
 		}
 		
 		StringBuffer htmlBuffer = new StringBuffer();
+		htmlBuffer.append("This is worker IP: " + workerIPAddress);
 		htmlBuffer.append("This is " + port);
 		htmlBuffer.append("This is " + job);
 		htmlBuffer.append("This is " + status);
@@ -68,15 +70,61 @@ public class MasterServlet extends HttpServlet {
 
 		return htmlBuffer;
 	}
+	
+	public void sendReduce(HttpServletRequest request){
+		try{
+			String url = "http://" + request.getServerName() + ":" + request.getServerPort()  + "/runreduce"; 
+			URL obj = new URL(url);
+			HttpURLConnection connection = (HttpURLConnection) obj.openConnection();
+			connection.setRequestMethod("POST");
+			connection.setRequestProperty("User-Agent", "MasterServlet");
+			connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+			String urlParameters = "masterServlet=sendingReduce";
+			connection.setDoOutput(true);
+			DataOutputStream wr = new DataOutputStream(connection.getOutputStream());
+			wr.writeBytes(urlParameters);
+			wr.flush();
+			wr.close();
+			connection.getResponseCode();
+		} catch(IOException e){
+			
+		}
+	}
 
 	public StringBuffer sendStatus(HttpServletRequest request, HttpServletResponse response) throws IOException{		
-		// need table with status info about workers
 		StringBuffer htmlBuffer = new StringBuffer();
 		
 		htmlBuffer.append("<html>");
 		htmlBuffer.append("<h1>CIS 555 XPathServlet</h1>");
 		htmlBuffer.append("<p>Full Name: James Jin Park</p>");
 		htmlBuffer.append("<p>SEAS Login Name: jamespj</p>");
+
+		htmlBuffer.append("<h2>Worker Statuses</h2>");
+		htmlBuffer.append("<table>");
+		
+		htmlBuffer.append("<tr>");
+		htmlBuffer.append("<th>Worker IP address and Port</th>");
+		htmlBuffer.append("<th>Status</th>");
+		htmlBuffer.append("<th>Job Name</th>");
+		htmlBuffer.append("<th>Keys Read</th>");
+		htmlBuffer.append("<th>Keys Written</th>");
+		htmlBuffer.append("</tr>");
+		
+		Set<String> keys = workerStatuses.keySet();
+		
+		for(String key : keys){
+			if(workerStatuses.get(key).isActive()){
+				htmlBuffer.append("<tr>");		
+				htmlBuffer.append("<td>" +  key + "</td>");
+				htmlBuffer.append("<td>" +  workerStatuses.get(key).getStatus() + "</td>");
+				htmlBuffer.append("<td>" +  workerStatuses.get(key).getJob() + "</td>");
+				htmlBuffer.append("<td>" +  workerStatuses.get(key).getKeysRead()+ "</td>");
+				htmlBuffer.append("<td>" +  workerStatuses.get(key).getKeysWritten() + "</td>");
+				htmlBuffer.append("</tr>");			
+			}
+		}
+		htmlBuffer.append("</table>");
+
 		
 		htmlBuffer.append("<form method=\"POST\" action=\"/runmap\">");
 		
@@ -116,17 +164,28 @@ public class MasterServlet extends HttpServlet {
 		String numMapThreads = request.getParameter("numMapThreads");
 		String numReduceThreads = request.getParameter("numReduceThreads");
 		
-		this.currentJob = jobName; //saves the current job 
+		int numMap = 0;
+		int numReduce = 0;
+		if(numMapThreads != null){
+			numMap = Integer.valueOf(numMapThreads);
+		}
+		if(numReduceThreads != null){
+			numReduce = Integer.valueOf(numReduceThreads);
+		}
+		
+		if(jobName != null) this.currentJobContext.setJobName(jobName);
+		if(inputDir != null) this.currentJobContext.setInputDir(inputDir);			
+		if(outputDir != null) this.currentJobContext.setOutputDir(outputDir);			
+		if(numMapThreads != null) this.currentJobContext.setNumMapThreads(numMap);
+		if(numReduceThreads != null) this.currentJobContext.setNumReduceThreads(numReduce);
+		
+//		this.currentJobContext = new JobContext(jobName, inputDir, outputDir, numMap, numReduce);
 
 		switch(path){
-			case "/runmap": 		runMap(jobName, inputDir, numMapThreads);
-
-			buffer.append("This is output Dir " + outputDir);
-			buffer.append("This is numReduceThreads " + numReduceThreads);
-			
+			case "/runmap": 		buffer = runMap();
 									break;
-									
-
+			case "/runreduce": 		buffer = runReduce();
+									break;
 		}
 	
 		out.println(buffer);
@@ -136,40 +195,77 @@ public class MasterServlet extends HttpServlet {
 
 	}
 	
-	public void runMap(String jobName, String inputDir, String numMapThreads) throws IOException{
+	public StringBuffer runMap() throws IOException{
+		System.out.println("RUNNING MAP!");
+		StringBuffer htmlBuffer = new StringBuffer();
+		htmlBuffer.append("<html>");
+		htmlBuffer.append("<h1>Running MapReduce!</h1>");
+
 		for(String workerIPandPort: workerStatuses.keySet()){
 			String url = "http://" + workerIPandPort + "/runmap"; 
 			URL obj = new URL(url);
+			System.out.println("Sending POST to " + workerIPandPort + "/runmap!");
 			HttpURLConnection connection = (HttpURLConnection) obj.openConnection();
-			
 			connection.setRequestMethod("POST");
 			connection.setRequestProperty("User-Agent", "MasterServlet");
-			String urlParameters = "job=" + jobName + "inputDir=" + inputDir + "numThreads=" + numMapThreads  + "numWorkers=" + 
-					workerStatuses.size();
+			connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+
+			String urlParameters = "job=" + currentJobContext.getJobName() + "&input=" + 
+				currentJobContext.getInputDir() + "&numMapThreads=" + currentJobContext.getNumMapThreads() + 
+				"&numWorkers=" + workerStatuses.size();
+			
+			System.out.println(urlParameters);
+
+			String temp = "";
+			int count = 1;
+			for(String key : workerStatuses.keySet()){
+				temp += "&worker" + count + "=" + key;
+				count++;
+			}
+			urlParameters += temp;
 			connection.setDoOutput(true);
 			DataOutputStream wr = new DataOutputStream(connection.getOutputStream());
 			wr.writeBytes(urlParameters);
 			wr.flush();
 			wr.close();
+			int responseCode = connection.getResponseCode();
+			htmlBuffer.append("<p>Received the response code " + responseCode + " from "+ url  + "</p>");
 		}
+		htmlBuffer.append("</html>");
+
+		return htmlBuffer;
 	}
-	public void runReduce(){
+	
+	public StringBuffer runReduce() throws IOException{
+		StringBuffer htmlBuffer = new StringBuffer();
+		htmlBuffer.append("<html>");
+		htmlBuffer.append("<h1>Running MapReduce!</h1>");
+
 		for(String workerIPandPort: workerStatuses.keySet()){
-			String url = "http://" + workerIPandPort + "/runmap"; 
+			String url = "http://" + workerIPandPort + "/runreduce"; 
 			URL obj = new URL(url);
+			System.out.println("Sending POST to " + workerIPandPort + "/runreduce!");
+
 			HttpURLConnection connection = (HttpURLConnection) obj.openConnection();
-			
 			connection.setRequestMethod("POST");
 			connection.setRequestProperty("User-Agent", "MasterServlet");
-			String urlParameters = "job=" + currentJob + "outputDir=" + outputDir + "numThreads=" + numMapThreads  + "numWorkers=" + 
-					workerStatuses.size();
+			connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+			
+			String urlParameters = "job=" + currentJobContext.getJobName() + "&output=" + 
+					currentJobContext.getOutputDir() + "&numReduceThreads=" + currentJobContext.getNumReduceThreads() + 
+					"&numWorkers=" + workerStatuses.size();
+			
 			connection.setDoOutput(true);
 			DataOutputStream wr = new DataOutputStream(connection.getOutputStream());
 			wr.writeBytes(urlParameters);
 			wr.flush();
 			wr.close();
+			int responseCode = connection.getResponseCode();
+			htmlBuffer.append("<p>Received the response code " + responseCode + " from "+ url  + "</p>");
+
 		}
-		
+		htmlBuffer.append("</html>");
+		return htmlBuffer;
 	}
 	
 	public boolean checkAllWorkerStatuses(){

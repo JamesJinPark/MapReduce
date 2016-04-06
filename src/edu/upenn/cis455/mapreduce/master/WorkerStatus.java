@@ -66,5 +66,14 @@ public class WorkerStatus {
 	public String getWorkerIPAddress(){
 		return workerIPAddress;
 	}
+	
+	public boolean isActive(){
+		Date temp = new Date();
+		long timeGap = (temp.getTime() - timestamp.getTime());
+		if(timeGap > 30000){
+			return false;
+		}
+		return true;
+	}
 
 }

@@ -3,10 +3,16 @@
 
 cd /home/cis455/workspace/HW3/
 
-ant
+#ant
 
-sudo cp /home/cis455/workspace/HW3/master.war /usr/share/jetty/webapps/
+#java -jar jetty-runner-7.5.4.v20111024.jar --port 8080 master.war
+#java -jar jetty-runner-7.5.4.v20111024.jar --port 8081 worker.war
 
-cd /usr/share/jetty/
+#java -jar jetty-runner-7.5.4.v20111024.jar --port 8081 worker1.war
+java -jar jetty-runner-7.5.4.v20111024.jar --port 8082 worker2.war
 
-sudo java -jar start.jar
+
+#sudo cp /home/cis455/workspace/HW3/master.war /usr/share/jetty/webapps/
+#cd /usr/share/jetty/
+#sudo java -jar start.jar
+#/workerstatus?port=80&job=wordcount&status=idle&keysRead=0&keysWritten=0
